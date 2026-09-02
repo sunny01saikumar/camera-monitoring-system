@@ -1,3 +1,6 @@
+import os
+import json
+
 # Centralized configuration parameters for RTSP Person Detection
 
 # Base Paths
