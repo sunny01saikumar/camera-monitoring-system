@@ -1,9 +1,4 @@
-import os
-import json
-
-# Force FFmpeg in OpenCV to use reliable TCP transport for RTSP streams
-# This prevents packet loss and 'Stream timeout triggered' errors over public IPs
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+# Centralized configuration parameters for RTSP Person Detection
 
 # Base Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

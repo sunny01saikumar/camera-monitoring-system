@@ -183,7 +183,7 @@ class StreamProcessor:
                 
                 cv2.putText(offline_frame, f"Target: {url_display}", (80, 250), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.45, (130, 130, 130), 1, cv2.LINE_AA)
-                cv2.putText(offline_frame, "Retrying TCP RTSP Connection...", (180, 280), 
+                cv2.putText(offline_frame, "Connecting to RTSP Stream...", (180, 280), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 240, 255), 1, cv2.LINE_AA)
                 
                 # Pulsing indicator
@@ -210,9 +210,9 @@ class StreamProcessor:
         while self.running:
             target_url = self.rtsp_url
             cam_name = self.active_camera["name"]
-            print(f"Connecting RTSP via TCP to [{cam_name}]: {target_url}")
+            print(f"Connecting to RTSP stream [{cam_name}]: {target_url}")
             
-            cap = cv2.VideoCapture(target_url, cv2.CAP_FFMPEG)
+            cap = cv2.VideoCapture(target_url)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
             if not cap.isOpened():
