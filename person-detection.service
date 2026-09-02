@@ -1,0 +1,16 @@
+[Unit]
+Description=RTSP Person Detection & Camera Monitoring Dashboard Service
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/person_detection
+ExecStart=/home/pi/person_detection/venv/bin/gunicorn --workers 1 --threads 4 --bind 0.0.0.0:5000 wsgi:app
+Restart=always
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

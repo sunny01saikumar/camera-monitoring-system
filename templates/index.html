@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionGuard AI - Multi-Camera RTSP Dashboard</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Dashboard Header -->
+        <header class="dashboard-header">
+            <div class="logo-area">
+                <span class="logo-dot pulse-active"></span>
+                <h1>VISION<span>GUARD</span> <small>PRO v2.0</small></h1>
+            </div>
+
+            <!-- Active Camera Dropdown Switcher -->
+            <div class="camera-switcher-header">
+                <label for="camera-select">ACTIVE CAMERA:</label>
+                <select id="camera-select" class="glass-select">
+                    <option value="">Loading cameras...</option>
+                </select>
+                <button id="btn-manage-cameras" class="btn btn-sm btn-secondary">⚙️ Manage Cameras</button>
+            </div>
+
+            <div class="system-telemetry">
+                <div class="telemetry-item">
+                    <span class="label">STREAM STATUS:</span>
+                    <span id="rtsp-status" class="value text-warning">Connecting...</span>
+                </div>
+                <div class="telemetry-item">
+                    <span class="label">ENGINE:</span>
+                    <span class="value text-cyan">YOLOv8 ONNX (TCP)</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Layout Grid -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Side: Live Feed -->
+            <section class="grid-item feed-section card-glass">
+                <div class="card-header">
+                    <h2>📷 <span id="active-cam-title">LIVE STREAM FEED</span></h2>
+                    <span id="fps-counter" class="hud-badge">0.0 FPS</span>
+                </div>
+                <div class="stream-container">
+                    <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Live Feed Stream">
+                    <div id="paused-overlay" class="paused-overlay hidden">
+                        <div class="paused-message">
+                            <h3>MONITORING PAUSED</h3>
+                            <p>Press resume to start processing feed</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="stream-controls">
+                    <button id="btn-pause" class="btn btn-primary">
+                        <span class="btn-icon">⏸</span> Pause Stream
+                    </button>
+                    <button id="btn-reset" class="btn btn-secondary">
+                        🔄 Reconnect Feed
+                    </button>
+                </div>
+            </section>
+
+            <!-- Right Side: Stats Panel -->
+            <section class="grid-item stats-section">
+                
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card card-glass neon-purple">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-info">
+                            <span class="stat-label">CURRENT PEOPLE</span>
+                            <span id="stat-current" class="stat-value hud-font">0</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card card-glass neon-cyan">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-info">
+                            <span class="stat-label">PEAK DETECTION</span>
+                            <span id="stat-peak" class="stat-value hud-font">0</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card card-glass neon-green">
+                        <div class="stat-icon">🎞️</div>
+                        <div class="stat-info">
+                            <span class="stat-label">TOTAL FRAMES</span>
+                            <span id="stat-frames" class="stat-value hud-font">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parameters Controls Card -->
+                <div class="card-glass settings-card">
+                    <div class="card-header">
+                        <h2>⚙️ DETECTION ENGINE SETTINGS</h2>
+                    </div>
+                    <div class="settings-sliders">
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Confidence Threshold</span>
+                                <span id="conf-val" class="slider-badge text-cyan">40%</span>
+                            </div>
+                            <input type="range" id="slider-conf" min="0.1" max="0.9" step="0.05" value="0.4">
+                            <p class="slider-desc">Minimum confidence probability required for person detection.</p>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>NMS Threshold</span>
+                                <span id="nms-val" class="slider-badge text-purple">40%</span>
+                            </div>
+                            <input type="range" id="slider-nms" min="0.1" max="0.9" step="0.05" value="0.4">
+                            <p class="slider-desc">Non-Maximum Suppression threshold to merge overlapping boxes.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom Left: Live Chart -->
+            <section class="grid-item chart-section card-glass">
+                <div class="card-header">
+                    <h2>📈 REAL-TIME COUNT TELEMETRY</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="liveChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Bottom Right: Live Event Logs -->
+            <section class="grid-item log-section card-glass">
+                <div class="card-header">
+                    <h2>📋 DETECTION LOGS</h2>
+                    <button id="btn-clear-logs" class="btn btn-sm">Clear Logs</button>
+                </div>
+                <div id="logs-container" class="logs-container">
+                    <div class="log-entry system-entry">
+                        <span class="log-time">[System]</span>
+                        <span class="log-msg">Multi-Camera Detection System active.</span>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Glassmorphic Camera Management Modal -->
+    <div id="modal-cameras" class="modal-overlay hidden">
+        <div class="modal-card card-glass">
+            <div class="modal-header">
+                <h2>📹 MANAGE RTSP CAMERAS</h2>
+                <button id="modal-close" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- Add Camera Form -->
+                <form id="form-add-camera" class="camera-form">
+                    <h3>Add New Camera / Public RTSP URL</h3>
+                    <input type="hidden" id="cam-edit-id" value="">
+                    <div class="form-row">
+                        <input type="text" id="cam-name" class="glass-input" placeholder="Camera Name (e.g. Back Entrance)" required>
+                        <input type="text" id="cam-location" class="glass-input" placeholder="Location Tag (optional)">
+                    </div>
+                    <div class="form-row">
+                        <input type="text" id="cam-url" class="glass-input" placeholder="RTSP URL (rtsp://admin:pass@ip:port/channel)" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" id="btn-save-cam" class="btn btn-primary">➕ Add Camera</button>
+                        <button type="button" id="btn-cancel-edit" class="btn btn-secondary hidden">Cancel Edit</button>
+                    </div>
+                </form>
+
+                <hr class="glass-hr">
+
+                <!-- Configured Cameras List -->
+                <h3>Configured Camera Streams</h3>
+                <div id="camera-list" class="camera-list-container">
+                    <!-- Loaded dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
