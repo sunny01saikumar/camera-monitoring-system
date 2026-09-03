@@ -2,7 +2,7 @@
   {
     "id": "cam_1",
     "name": "Main Entrance (Channel 201)",
-    "url": "rtsp://admin:xx2317xx2317@182.76.136.44:8554/streaming/channels/201",
+    "url": "rtsp://admin:xx2317xx2317@172.20.100.154:8554/streaming/channels/201",
     "location": "Front Gate"
   }
 ]
