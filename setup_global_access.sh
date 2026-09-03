@@ -21,5 +21,10 @@ sleep 2
 echo "=============================================="
 echo " Starting Free Public HTTPS Global Tunnel..."
 echo "=============================================="
+echo "NOTE: Look for the 'https://...trycloudflare.com' link in the output below."
+echo "Each time this command is run, Cloudflare generates a fresh live URL!"
+echo "=============================================="
+
 cloudflared tunnel --url http://127.0.0.1:5000
+
 
