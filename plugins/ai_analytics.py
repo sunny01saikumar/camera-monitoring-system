@@ -12,9 +12,15 @@ class AIAnalyticsService:
     Publishes 'UNKNOWN_PERSON_ALERT' events to the OSGi EventBus when unrecognized faces appear.
     """
     def __init__(self):
+        if not os.path.exists(config.MODEL_PATH):
+            print(f"[AI Analytics] Model missing at {config.MODEL_PATH}. Downloading now...")
+            import download_model
+            download_model.main()
+
         self.net = cv2.dnn.readNet(config.MODEL_PATH)
         self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
         self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+
         
         self.conf_threshold = config.DEFAULT_CONF_THRESHOLD
         self.nms_threshold = config.DEFAULT_NMS_THRESHOLD
