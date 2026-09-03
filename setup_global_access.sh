@@ -2,8 +2,8 @@
 set -e
 
 echo "=============================================="
-echo "   Global HTTPS Tunnel Setup for Raspberry Pi 5"
-echo "   Access Dashboard from ANY Location Worldwide"
+echo "   Persistent Background Global Tunnel Setup"
+echo "   Raspberry Pi 5 Auto-Boot Service"
 echo "=============================================="
 
 # Check if cloudflared is installed
@@ -14,17 +14,40 @@ if ! command -v cloudflared &> /dev/null; then
     rm cloudflared.deb
 fi
 
-echo "Ensuring web server service is active..."
-sudo systemctl restart person-detection || true
-sleep 2
+echo "Installing systemd service /etc/systemd/system/global-tunnel.service..."
+
+cat <<EOF | sudo tee /etc/systemd/system/global-tunnel.service > /dev/null
+[Unit]
+Description=Cloudflare Global Access Tunnel for Camera Monitoring
+After=network.target network-online.target person-detection.service
+Wants=network-online.target person-detection.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/cloudflared tunnel --url http://127.0.0.1:5000
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "Enabling and starting persistent background service..."
+sudo systemctl daemon-reload
+sudo systemctl enable global-tunnel
+sudo systemctl restart global-tunnel
+
+sleep 4
 
 echo "=============================================="
-echo " Starting Free Public HTTPS Global Tunnel..."
+echo "   PERSISTENT GLOBAL TUNNEL INSTALLED & ACTIVE!"
+echo "   This tunnel runs 24/7 in the background."
+echo "   You can close your SSH terminal anytime!"
 echo "=============================================="
-echo "NOTE: Look for the 'https://...trycloudflare.com' link in the output below."
-echo "Each time this command is run, Cloudflare generates a fresh live URL!"
+echo " Fetching your live HTTPS URL from systemd logs..."
+echo "----------------------------------------------"
+sudo journalctl -u global-tunnel -n 30 --no-pager | grep -i "trycloudflare.com" || true
 echo "=============================================="
-
-cloudflared tunnel --url http://127.0.0.1:5000
-
-
