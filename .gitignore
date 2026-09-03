@@ -12,9 +12,8 @@ __pycache__/
 # Large Weights File (auto-downloaded by script)
 models/yolov8n.onnx
 
-# IDE & OS Files
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-*.log
+# Sensitive Credentials & Alerts
+data/smtp_config.json
+data/alerts/*
+!data/alerts/.gitkeep
+

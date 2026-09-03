@@ -4,12 +4,15 @@ import uuid
 import cv2
 import numpy as np
 import config
-from detector import PersonDetector
+import core.config_manager as config_mgr
+from core.framework import framework, ServiceState
 
-class StreamProcessor:
+class StreamProcessorService:
+    """
+    OSGi Service Bundle: Multi-Camera Streaming & Ingestion Service.
+    On-Demand Execution: Dynamically invokes AIAnalyticsService only when active in OSGi framework.
+    """
     def __init__(self):
-        self.detector = PersonDetector()
-        
         # Camera management
         self.cameras = config.load_cameras()
         self.active_camera = self.cameras[0] if self.cameras else {
@@ -31,45 +34,38 @@ class StreamProcessor:
         self.processed_frame = None
         self.detections = []
         
-        # Statistics
+        # Telemetry
         self.fps = 0.0
         self.current_count = 0
         self.peak_count = 0
         self.total_frames = 0
-        
-        # Detection history logs
         self.detection_logs = []
 
     def start(self):
-        """Start the background streaming and processing threads."""
+        """Activates the service and background processing threads."""
         if not self.running:
             self.running = True
             self.reader_thread = threading.Thread(target=self._reader_loop, name="RTSPReader", daemon=True)
             self.processor_thread = threading.Thread(target=self._processor_loop, name="FrameProcessor", daemon=True)
             self.reader_thread.start()
             self.processor_thread.start()
-            print(f"StreamProcessor started for camera: {self.active_camera['name']}")
+            print(f"[OSGi Plugin] StreamProcessorService ACTIVE for camera: {self.active_camera['name']}")
 
     def stop(self):
-        """Stop all background threads and release resources."""
+        """Deactivates the service and stops threads to conserve CPU."""
         self.running = False
         if self.reader_thread:
             self.reader_thread.join(timeout=2.0)
         if self.processor_thread:
             self.processor_thread.join(timeout=2.0)
-        print("StreamProcessor threads stopped.")
+        print("[OSGi Plugin] StreamProcessorService RESOLVED (Stopped).")
 
-    # Camera Management CRUD APIs
+    # Camera Management APIs
     def get_cameras(self):
-        """Get full list of configured cameras and active ID."""
         with self.lock:
-            return {
-                "cameras": self.cameras,
-                "active_id": self.active_camera["id"]
-            }
+            return {"cameras": self.cameras, "active_id": self.active_camera["id"]}
 
     def switch_camera(self, cam_id):
-        """Switch active RTSP stream to a different camera."""
         with self.lock:
             target = next((c for c in self.cameras if c["id"] == cam_id), None)
             if not target:
@@ -82,11 +78,10 @@ class StreamProcessor:
             self.processed_frame = None
             self.current_count = 0
             self.peak_count = 0
-            print(f"Switched active camera to: {target['name']} ({target['url']})")
+            print(f"[Camera Service] Switched active camera to: {target['name']} ({target['url']})")
             return True, "Switched successfully"
 
     def add_camera(self, name, url, location=""):
-        """Add a new camera and optionally save to disk."""
         with self.lock:
             cam_id = f"cam_{uuid.uuid4().hex[:6]}"
             new_cam = {
@@ -100,7 +95,6 @@ class StreamProcessor:
             return new_cam
 
     def edit_camera(self, cam_id, name, url, location=""):
-        """Edit details of an existing camera."""
         with self.lock:
             cam = next((c for c in self.cameras if c["id"] == cam_id), None)
             if not cam:
@@ -110,7 +104,6 @@ class StreamProcessor:
             cam["url"] = url.strip()
             cam["location"] = location.strip()
             
-            # If editing active camera, update stream URL immediately
             if self.active_camera["id"] == cam_id:
                 self.active_camera = cam
                 self.rtsp_url = cam["url"]
@@ -120,14 +113,12 @@ class StreamProcessor:
             return True, "Updated successfully"
 
     def delete_camera(self, cam_id):
-        """Delete a camera from configuration."""
         with self.lock:
             if len(self.cameras) <= 1:
                 return False, "Cannot delete the only remaining camera"
                 
             self.cameras = [c for c in self.cameras if c["id"] != cam_id]
             
-            # If deleted camera was active, switch to first available camera
             if self.active_camera["id"] == cam_id:
                 self.active_camera = self.cameras[0]
                 self.rtsp_url = self.active_camera["url"]
@@ -136,19 +127,12 @@ class StreamProcessor:
             config.save_cameras(self.cameras)
             return True, "Deleted successfully"
 
-    def update_settings(self, conf_threshold, nms_threshold):
-        """Update detection engine thresholds on the fly."""
-        with self.lock:
-            self.detector.set_thresholds(conf_threshold, nms_threshold)
-
     def toggle_pause(self):
-        """Toggle stream processing between paused and active."""
         with self.lock:
             self.paused = not self.paused
             return self.paused
 
     def get_stats(self):
-        """Get copy of current status, telemetry, and camera metadata."""
         with self.lock:
             return {
                 "connected": self.connected,
@@ -158,22 +142,19 @@ class StreamProcessor:
                 "peak_count": self.peak_count,
                 "total_frames": self.total_frames,
                 "active_camera": self.active_camera,
+                "osgi_services": framework.get_service_states(),
                 "logs": list(self.detection_logs)
             }
 
     def get_frame_jpeg(self):
-        """Encodes the processed frame as JPEG. Returns offline HUD if disconnected."""
         with self.lock:
-            # 1. Offline Frame Generator
             if not self.connected:
                 offline_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                # Tech-grid background
                 for i in range(0, 640, 40):
                     cv2.line(offline_frame, (i, 0), (i, 480), (25, 25, 25), 1)
                 for j in range(0, 480, 40):
                     cv2.line(offline_frame, (0, j), (640, j), (25, 25, 25), 1)
                 
-                # Text labels
                 cv2.putText(offline_frame, f"CAMERA OFFLINE: {self.active_camera['name'].upper()}", (90, 210), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
                 
@@ -186,14 +167,12 @@ class StreamProcessor:
                 cv2.putText(offline_frame, "Connecting to RTSP Stream...", (180, 280), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 240, 255), 1, cv2.LINE_AA)
                 
-                # Pulsing indicator
                 dot_color = (0, 0, 255) if int(time.time()) % 2 == 0 else (40, 40, 40)
                 cv2.circle(offline_frame, (65, 204), 7, dot_color, -1)
                 
                 ret, jpeg = cv2.imencode('.jpg', offline_frame)
                 return jpeg.tobytes() if ret else None
 
-            # 2. Initializing frame
             if self.processed_frame is None:
                 loading_frame = np.zeros((480, 640, 3), dtype=np.uint8)
                 cv2.putText(loading_frame, f"CONNECTING TO {self.active_camera['name'].upper()}...", (120, 240), 
@@ -201,22 +180,20 @@ class StreamProcessor:
                 ret, jpeg = cv2.imencode('.jpg', loading_frame)
                 return jpeg.tobytes() if ret else None
 
-            # 3. Processed Frame
             ret, jpeg = cv2.imencode('.jpg', self.processed_frame)
             return jpeg.tobytes() if ret else None
 
     def _reader_loop(self):
-        """Continuously pulls frames using TCP transport FFmpeg options."""
         while self.running:
             target_url = self.rtsp_url
             cam_name = self.active_camera["name"]
-            print(f"Connecting to RTSP stream [{cam_name}]: {target_url}")
+            print(f"[Camera Service] Connecting to stream [{cam_name}]: {target_url}")
             
             cap = cv2.VideoCapture(target_url)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
             if not cap.isOpened():
-                print(f"Failed to connect to {cam_name}. Retrying in 5s...")
+                print(f"[Camera Service] Failed to connect to {cam_name}. Retrying in 5s...")
                 with self.lock:
                     self.connected = False
                 time.sleep(5)
@@ -224,12 +201,12 @@ class StreamProcessor:
 
             with self.lock:
                 self.connected = True
-            print(f"Successfully connected to RTSP stream: {cam_name}")
+            print(f"[Camera Service] Connected to stream: {cam_name}")
 
             while self.running and self.rtsp_url == target_url:
                 ret, frame = cap.read()
                 if not ret:
-                    print(f"RTSP stream disconnected for {cam_name}. Retrying...")
+                    print(f"[Camera Service] Disconnected: {cam_name}")
                     with self.lock:
                         self.connected = False
                         self.raw_frame = None
@@ -244,7 +221,7 @@ class StreamProcessor:
             time.sleep(0.5)
 
     def _processor_loop(self):
-        """Runs detection pipeline and records counts and log events."""
+        """Processes frames, invoking AI service dynamically if active in OSGi framework."""
         last_fps_time = time.time()
         frame_count = 0
 
@@ -276,8 +253,20 @@ class StreamProcessor:
                 time.sleep(0.01)
                 continue
 
-            proc_frame, detections = self.detector.detect(frame)
-            count = len(detections)
+            # OSGi Dynamic Service Lookup: Check if AI Analytics Service is ACTIVE
+            ai_service = framework.get_service("ai_analytics_service")
+            ai_active = framework.get_service_states().get("ai_analytics_service") == ServiceState.ACTIVE
+
+            if ai_service and ai_active:
+                # Execute AI Service on-demand
+                proc_frame, detections, unknown_detected = ai_service.detect_and_classify(frame, self.active_camera["name"])
+                count = len(detections)
+            else:
+                # Pass-through mode when AI Service is deactivated (saves CPU)
+                proc_frame = frame.copy()
+                count = 0
+                detections = []
+                cv2.putText(proc_frame, "AI ENGINE INACTIVE", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
 
             # Draw camera name banner on frame top-right
             h_f, w_f = proc_frame.shape[:2]
@@ -317,3 +306,7 @@ class StreamProcessor:
                 last_fps_time = now
 
             time.sleep(0.01)
+
+# Register service into OSGi framework
+stream_service = StreamProcessorService()
+framework.register_service("camera_service", stream_service)

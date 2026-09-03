@@ -9,8 +9,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const cameraSelect = document.getElementById('camera-select');
     const btnManageCameras = document.getElementById('btn-manage-cameras');
+    const btnManageFaces = document.getElementById('btn-manage-faces');
+    const btnManageSmtp = document.getElementById('btn-manage-smtp');
+    
     const modalCameras = document.getElementById('modal-cameras');
-    const modalClose = document.getElementById('modal-close');
+    const modalFaces = document.getElementById('modal-faces');
+    const modalSmtp = document.getElementById('modal-smtp');
     
     const formAddCamera = document.getElementById('form-add-camera');
     const camEditId = document.getElementById('cam-edit-id');
@@ -21,6 +25,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCancelEdit = document.getElementById('btn-cancel-edit');
     const cameraListContainer = document.getElementById('camera-list');
     
+    const formUploadFace = document.getElementById('form-upload-face');
+    const facePersonName = document.getElementById('face-person-name');
+    const faceFile = document.getElementById('face-file');
+    const facesListContainer = document.getElementById('faces-list');
+    
+    const formSmtp = document.getElementById('form-smtp');
+    const smtpEnabled = document.getElementById('smtp-enabled');
+    const smtpSender = document.getElementById('smtp-sender');
+    const smtpPassword = document.getElementById('smtp-password');
+    const smtpRecipient = document.getElementById('smtp-recipient');
+    const smtpCooldown = document.getElementById('smtp-cooldown');
+    
+    const osgiServicesContainer = document.getElementById('osgi-services-container');
     const btnPause = document.getElementById('btn-pause');
     const btnReset = document.getElementById('btn-reset');
     const btnClearLogs = document.getElementById('btn-clear-logs');
@@ -28,11 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const statCurrent = document.getElementById('stat-current');
     const statPeak = document.getElementById('stat-peak');
     const statFrames = document.getElementById('stat-frames');
-    
-    const sliderConf = document.getElementById('slider-conf');
-    const sliderNms = document.getElementById('slider-nms');
-    const confVal = document.getElementById('conf-val');
-    const nmsVal = document.getElementById('nms-val');
     const logsContainer = document.getElementById('logs-container');
 
     // Chart Setup
@@ -87,8 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(res => res.json())
             .then(data => {
                 const { cameras, active_id } = data;
-                
-                // Populate Dropdown
                 cameraSelect.innerHTML = '';
                 cameras.forEach(cam => {
                     const opt = document.createElement('option');
@@ -97,11 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (cam.id === active_id) opt.selected = true;
                     cameraSelect.appendChild(opt);
                 });
-
-                // Populate Modal List
                 renderCameraListModal(cameras, active_id);
-            })
-            .catch(err => console.error("Error loading cameras:", err));
+            });
     }
 
     function renderCameraListModal(cameras, active_id) {
@@ -109,22 +116,17 @@ document.addEventListener('DOMContentLoaded', () => {
         cameras.forEach(cam => {
             const item = document.createElement('div');
             item.className = 'camera-item';
-            
             const isActive = cam.id === active_id;
-            
             item.innerHTML = `
                 <div class="camera-item-info">
                     <h4>${cam.name} ${isActive ? '<span class="text-cyan">(ACTIVE)</span>' : ''}</h4>
                     <p><strong>RTSP:</strong> ${cam.url}</p>
-                    ${cam.location ? `<p><strong>Location:</strong> ${cam.location}</p>` : ''}
                 </div>
                 <div class="camera-item-actions">
                     <button class="btn btn-sm btn-secondary btn-edit-cam" data-id="${cam.id}">✏️ Edit</button>
                     <button class="btn btn-sm btn-danger btn-delete-cam" data-id="${cam.id}">🗑️ Delete</button>
                 </div>
             `;
-
-            // Bind Edit button
             item.querySelector('.btn-edit-cam').addEventListener('click', () => {
                 camEditId.value = cam.id;
                 camName.value = cam.name;
@@ -133,51 +135,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnSaveCam.textContent = '💾 Save Changes';
                 btnCancelEdit.classList.remove('hidden');
             });
-
-            // Bind Delete button
             item.querySelector('.btn-delete-cam').addEventListener('click', () => {
-                if (confirm(`Are you sure you want to delete camera "${cam.name}"?`)) {
+                if (confirm(`Delete camera "${cam.name}"?`)) {
                     fetch('/api/cameras/delete', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ id: cam.id })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            loadCameras();
-                            refreshStream();
-                        } else {
-                            alert(data.message);
-                        }
-                    });
+                    }).then(() => { loadCameras(); refreshStream(); });
                 }
             });
-
             cameraListContainer.appendChild(item);
         });
     }
 
-    // Switch Camera Dropdown Change
     cameraSelect.addEventListener('change', () => {
         const selectedId = cameraSelect.value;
         if (!selectedId) return;
-
         fetch('/api/cameras/switch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: selectedId })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === 'success') {
-                refreshStream();
-                appendLog("[System]", `Switched stream to selected camera.`, "system-entry");
-            }
-        });
+        }).then(() => { refreshStream(); appendLog("[OSGi Core]", "Switched active camera.", "system-entry"); });
     });
 
-    // Save/Add Camera Form
     formAddCamera.addEventListener('submit', (e) => {
         e.preventDefault();
         const id = camEditId.value;
@@ -192,62 +172,150 @@ document.addEventListener('DOMContentLoaded', () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(data => {
+        }).then(() => { resetCameraForm(); loadCameras(); refreshStream(); });
+    });
+
+    btnCancelEdit.addEventListener('click', resetCameraForm);
+    function resetCameraForm() {
+        camEditId.value = ''; camName.value = ''; camUrl.value = ''; camLocation.value = '';
+        btnSaveCam.textContent = '➕ Add Camera'; btnCancelEdit.classList.add('hidden');
+    }
+
+    // Render OSGi Service Controls (On-Demand Service Execution)
+    function renderOSGiServices(services) {
+        osgiServicesContainer.innerHTML = '';
+        const serviceNames = {
+            "camera_service": "Camera Ingestion & Proxy Service",
+            "ai_analytics_service": "YOLOv8 + Known/Unknown AI Service",
+            "gmail_notifier_service": "Gmail SMTP Alert Service"
+        };
+
+        Object.keys(services).forEach(service_id => {
+            const state = services[service_id];
+            const isActive = state === "ACTIVE";
+            const item = document.createElement('div');
+            item.className = 'osgi-service-item';
+            
+            item.innerHTML = `
+                <div class="osgi-service-info">
+                    <h4>${serviceNames[service_id] || service_id}</h4>
+                    <p>Bundle State: <span class="${isActive ? 'service-status-active' : 'service-status-resolved'}">[${state}]</span></p>
+                </div>
+                <button class="btn btn-sm ${isActive ? 'btn-danger' : 'btn-primary'} btn-toggle-osgi" data-id="${service_id}" data-active="${isActive}">
+                    ${isActive ? 'Deactivate' : 'Execute (Start)'}
+                </button>
+            `;
+
+            item.querySelector('.btn-toggle-osgi').addEventListener('click', (e) => {
+                const sid = e.target.getAttribute('data-id');
+                const active = e.target.getAttribute('data-active') === 'true';
+                fetch('/api/osgi/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ service_id: sid, enable: !active })
+                }).then(() => pollTelemetry());
+            });
+
+            osgiServicesContainer.appendChild(item);
+        });
+    }
+
+    // Known Faces Gallery
+    function loadFaces() {
+        fetch('/api/faces')
+            .then(res => res.json())
+            .then(data => {
+                facesListContainer.innerHTML = '';
+                if (data.faces.length === 0) {
+                    facesListContainer.innerHTML = '<p style="color:#64748b; font-size:12px;">No known faces registered. Upload photos above.</p>';
+                    return;
+                }
+                data.faces.forEach(face => {
+                    const item = document.createElement('div');
+                    item.className = 'camera-item';
+                    item.innerHTML = `
+                        <div class="camera-item-info">
+                            <h4>KNOWN: ${face.name}</h4>
+                            <p>Profile: ${face.filename}</p>
+                        </div>
+                        <span class="hud-badge">REGISTERED</span>
+                    `;
+                    facesListContainer.appendChild(item);
+                });
+            });
+    }
+
+    formUploadFace.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('name', facePersonName.value.trim());
+        formData.append('file', faceFile.files[0]);
+
+        fetch('/api/faces/upload', {
+            method: 'POST',
+            body: formData
+        }).then(res => res.json()).then(data => {
             if (data.status === 'success') {
-                resetCameraForm();
-                loadCameras();
-                refreshStream();
-            } else {
-                alert(data.message);
+                facePersonName.value = ''; faceFile.value = '';
+                loadFaces();
+                appendLog("[AI Analytics]", `New known face profile registered: ${data.name}`, "system-entry");
             }
         });
     });
 
-    btnCancelEdit.addEventListener('click', resetCameraForm);
-
-    function resetCameraForm() {
-        camEditId.value = '';
-        camName.value = '';
-        camUrl.value = '';
-        camLocation.value = '';
-        btnSaveCam.textContent = '➕ Add Camera';
-        btnCancelEdit.classList.add('hidden');
+    // Gmail SMTP Settings
+    function loadSMTP() {
+        fetch('/api/smtp')
+            .then(res => res.json())
+            .then(data => {
+                smtpEnabled.checked = data.enabled || false;
+                smtpSender.value = data.sender_email || '';
+                smtpPassword.value = data.app_password || '';
+                smtpRecipient.value = data.recipient_email || '';
+                smtpCooldown.value = data.cooldown_seconds || 180;
+            });
     }
 
-    // Modal Control
-    btnManageCameras.addEventListener('click', () => modalCameras.classList.remove('hidden'));
-    modalClose.addEventListener('click', () => modalCameras.classList.add('hidden'));
+    formSmtp.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const payload = {
+            enabled: smtpEnabled.checked,
+            sender_email: smtpSender.value.trim(),
+            app_password: smtpPassword.value.trim(),
+            recipient_email: smtpRecipient.value.trim(),
+            cooldown_seconds: parseInt(smtpCooldown.value) || 180
+        };
 
-    // Threshold Sliders
-    function saveSettings() {
-        const conf = parseFloat(sliderConf.value);
-        const nms = parseFloat(sliderNms.value);
-        confVal.textContent = `${Math.round(conf * 100)}%`;
-        nmsVal.textContent = `${Math.round(nms * 100)}%`;
-
-        fetch('/api/settings', {
+        fetch('/api/smtp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ conf_threshold: conf, nms_threshold: nms })
+            body: JSON.stringify(payload)
+        }).then(res => res.json()).then(data => {
+            alert(data.message);
+            modalSmtp.classList.add('hidden');
         });
-    }
+    });
 
-    sliderConf.addEventListener('input', () => confVal.textContent = `${Math.round(parseFloat(sliderConf.value) * 100)}%`);
-    sliderConf.addEventListener('change', saveSettings);
-    sliderNms.addEventListener('input', () => nmsVal.textContent = `${Math.round(parseFloat(sliderNms.value) * 100)}%`);
-    sliderNms.addEventListener('change', saveSettings);
+    // Modal Triggers
+    btnManageCameras.addEventListener('click', () => modalCameras.classList.remove('hidden'));
+    btnManageFaces.addEventListener('click', () => { loadFaces(); modalFaces.classList.remove('hidden'); });
+    btnManageSmtp.addEventListener('click', () => { loadSMTP(); modalSmtp.classList.remove('hidden'); });
 
-    // Pause/Resume
+    document.querySelectorAll('.modal-close').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modalCameras.classList.add('hidden');
+            modalFaces.classList.add('hidden');
+            modalSmtp.classList.add('hidden');
+        });
+    });
+
+    // Stream & Controls
     btnPause.addEventListener('click', () => {
         fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'toggle_pause' })
-        })
-        .then(res => res.json())
-        .then(data => {
+        }).then(res => res.json()).then(data => {
             if (data.status === 'success') updatePauseUI(data.paused);
         });
     });
@@ -260,27 +328,21 @@ document.addEventListener('DOMContentLoaded', () => {
             pausedOverlay.classList.remove('hidden');
             logoDot.className = 'logo-dot pulse-paused';
             rtspStatus.textContent = 'Paused';
-            rtspStatus.className = 'value text-warning';
         } else {
             btnPause.innerHTML = '<span class="btn-icon">⏸</span> Pause Stream';
             btnPause.classList.replace('btn-secondary', 'btn-primary');
             pausedOverlay.classList.add('hidden');
             logoDot.className = 'logo-dot pulse-active';
             rtspStatus.textContent = 'Connected';
-            rtspStatus.className = 'value text-green';
         }
     }
 
     function refreshStream() {
-        const timestamp = new Date().getTime();
-        videoStream.src = `/video_feed?t=${timestamp}`;
+        videoStream.src = `/video_feed?t=${new Date().getTime()}`;
     }
 
     btnReset.addEventListener('click', refreshStream);
-    btnClearLogs.addEventListener('click', () => {
-        logsContainer.innerHTML = '';
-        displayedLogKeys.clear();
-    });
+    btnClearLogs.addEventListener('click', () => { logsContainer.innerHTML = ''; displayedLogKeys.clear(); });
 
     function appendLog(timeStr, message, typeClass, count = null) {
         const entry = document.createElement('div');
@@ -315,6 +377,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 statPeak.textContent = data.peak_count;
                 statFrames.textContent = data.total_frames;
 
+                // Render OSGi Services
+                if (data.osgi_services) {
+                    renderOSGiServices(data.osgi_services);
+                }
+
                 if (!data.paused) {
                     chartData.push(data.current_count);
                     chartData.shift();
@@ -326,10 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!displayedLogKeys.has(key)) {
                         displayedLogKeys.add(key);
                         const typeClass = log.event.toLowerCase() === 'detection' ? 'detection' : 'clearance';
-                        const message = log.event.toLowerCase() === 'detection' 
-                            ? `Person detected on ${log.camera || 'camera'}` 
-                            : `Clearance on ${log.camera || 'camera'}`;
-                        appendLog(log.timestamp, message, typeClass, log.count);
+                        appendLog(log.timestamp, log.details || 'Event logged', typeClass, log.count);
                     }
                 });
             });
@@ -337,6 +401,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize
     loadCameras();
-    saveSettings();
     setInterval(pollTelemetry, 500);
 });

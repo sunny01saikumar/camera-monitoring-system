@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+echo "=============================================="
+echo "   Global HTTPS Tunnel Setup for Raspberry Pi 5"
+echo "   Access Dashboard from ANY Location Worldwide"
+echo "=============================================="
+
+# Check if cloudflared is installed
+if ! command -v cloudflared &> /dev/null; then
+    echo "Installing Cloudflare Tunnel (cloudflared) for ARM64..."
+    curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb
+    sudo dpkg -i cloudflared.deb
+    rm cloudflared.deb
+fi
+
+echo "=============================================="
+echo " Starting Free Public HTTPS Global Tunnel..."
+echo "=============================================="
+cloudflared tunnel --url http://localhost:5000
