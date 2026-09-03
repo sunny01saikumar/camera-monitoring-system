@@ -203,6 +203,7 @@ class StreamProcessorService:
                 self.connected = True
             print(f"[Camera Service] Connected to stream: {cam_name}")
 
+            first_frame = True
             while self.running and self.rtsp_url == target_url:
                 ret, frame = cap.read()
                 if not ret:
@@ -212,10 +213,15 @@ class StreamProcessorService:
                         self.raw_frame = None
                     break
 
+                if first_frame:
+                    print(f"[Camera Service] ✅ Successfully read first frame ({frame.shape[1]}x{frame.shape[0]}) from {cam_name}!")
+                    first_frame = False
+
                 with self.lock:
                     self.raw_frame = frame
                 
                 time.sleep(0.002)
+
 
             cap.release()
             time.sleep(0.5)
