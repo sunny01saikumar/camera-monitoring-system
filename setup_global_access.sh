@@ -14,7 +14,12 @@ if ! command -v cloudflared &> /dev/null; then
     rm cloudflared.deb
 fi
 
+echo "Ensuring web server service is active..."
+sudo systemctl restart person-detection || true
+sleep 2
+
 echo "=============================================="
 echo " Starting Free Public HTTPS Global Tunnel..."
 echo "=============================================="
-cloudflared tunnel --url http://localhost:5000
+cloudflared tunnel --url http://127.0.0.1:5000
+
